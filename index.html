@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergencias Nómadas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e1e2f 0%, #2a2a40 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .card {
+            max-width: 550px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 25px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .header { background: #d32f2f; padding: 20px; text-align: center; }
+        .header h1 { color: white; font-size: 24px; }
+        .content { padding: 25px; }
+        .campo { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e0e0e0; }
+        .label { font-size: 13px; font-weight: bold; color: #d32f2f; text-transform: uppercase; margin-bottom: 5px; display: block; }
+        .valor { font-size: 18px; color: #333; word-break: break-word; }
+        .contacto { background: #f5f5f5; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
+        .emergencia-badge { background: #ffeb3b; color: #333; padding: 8px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; text-align: center; margin-top: 20px; }
+        .error { text-align: center; padding: 40px; }
+        .error h2 { color: #d32f2f; margin-bottom: 15px; }
+        .loading { text-align: center; padding: 50px; font-size: 18px; color: white; }
+        .footer { background: #f9f9f9; padding: 15px; text-align: center; font-size: 11px; color: #888; }
+    </style>
+</head>
+<body>
+    <div id="contenido" class="loading">🔄 Cargando información de emergencia...</div>
+
+    <script>
+        // ✅ ENLACE CSV CORRECTO (con tu ID)
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/1EgL54WQfs4J8dwAQ9pUA6epqUEmUXhXlsskVTNJw2s8/export?format=csv";
+        
+        async function cargarDatos() {
+            const urlParams = new URLSearchParams(window.location.search);
+            let nombreBuscado = urlParams.get('nombre');
+            
+            if (!nombreBuscado) {
+                document.getElementById('contenido').innerHTML = `
+                    <div class="card error">
+                        <div class="header"><h1>⚠️ Error</h1></div>
+                        <div class="content"><h2>No se encontró la persona</h2><p>URL incorrecta. Por favor usa el código QR que te fue proporcionado.</p></div>
+                    </div>`;
+                return;
+            }
+            
+            nombreBuscado = nombreBuscado.trim().toLowerCase();
+            
+            try {
+                const response = await fetch(CSV_URL);
+                const csvText = await response.text();
+                const lineas = csvText.split('\n');
+                
+                if (lineas.length < 2) throw new Error('No hay datos en el CSV');
+                
+                let personaEncontrada = null;
+                
+                for (let i = 1; i < lineas.length; i++) {
+                    if (!lineas[i].trim()) continue;
+                    
+                    const fila = [];
+                    let dentroComillas = false;
+                    let valorActual = '';
+                    for (let char of lineas[i]) {
+                        if (char === '"') dentroComillas = !dentroComillas;
+                        else if (char === ',' && !dentroComillas) { fila.push(valorActual); valorActual = ''; }
+                        else valorActual += char;
+                    }
+                    fila.push(valorActual);
+                    const datos = fila.map(c => c.replace(/^"|"$/g, ''));
+                    
+                    const nombreCompleto = datos[2] || '';
+                    if (nombreCompleto.toLowerCase().includes(nombreBuscado)) {
+                        personaEncontrada = {
+                            nombre: datos[2] || 'No especificado',
+                            dni: datos[3] || 'No especificado',
+                            grupoSangre: datos[5] || 'No especificado',
+                            contacto1Nombre: datos[6] || 'No especificado',
+                            contacto1Parentesco: datos[7] || '',
+                            contacto1Telefono: datos[8] || 'No especificado',
+                            contacto2: datos[9] || 'No especificado',
+                            alergias: datos[10] || 'Ninguna',
+                            enfermedades: datos[11] || 'Ninguna',
+                            medicamentos: datos[12] || 'Ninguno'
+                        };
+                        break;
+                    }
+                }
+                
+                if (personaEncontrada) {
+                    document.getElementById('contenido').innerHTML = `
+                        <div class="card">
+                            <div class="header"><h1>🚨 INFORMACIÓN DE EMERGENCIA</h1></div>
+                            <div class="content">
+                                <div class="campo"><span class="label">👤 NOMBRE COMPLETO</span><div class="valor">${escapeHTML(personaEncontrada.nombre)}</div></div>
+                                <div class="campo"><span class="label">🆔 DOCUMENTO (DNI)</span><div class="valor">${escapeHTML(personaEncontrada.dni)}</div></div>
+                                <div class="campo"><span class="label">🩸 GRUPO SANGUÍNEO</span><div class="valor">${escapeHTML(personaEncontrada.grupoSangre)}</div></div>
+                                <div class="contacto"><div class="label">📞 CONTACTO DE EMERGENCIA 1</div><div class="valor"><strong>${escapeHTML(personaEncontrada.contacto1Nombre)}</strong> ${escapeHTML(personaEncontrada.contacto1Parentesco)}</div><div class="valor" style="font-size: 20px; margin-top: 8px;">📱 ${escapeHTML(personaEncontrada.contacto1Telefono)}</div></div>
+                                <div class="contacto"><div class="label">📞 CONTACTO DE EMERGENCIA 2</div><div class="valor">${escapeHTML(personaEncontrada.contacto2)}</div></div>
+                                <div class="campo"><span class="label">⚠️ ALERGIAS A MEDICAMENTOS</span><div class="valor">${escapeHTML(personaEncontrada.alergias)}</div></div>
+                                <div class="campo"><span class="label">🩺 ENFERMEDADES CRÓNICAS O CONDICIONES</span><div class="valor">${escapeHTML(personaEncontrada.enfermedades)}</div></div>
+                                <div class="campo"><span class="label">💊 MEDICAMENTOS ACTUALES</span><div class="valor">${escapeHTML(personaEncontrada.medicamentos)}</div></div>
+                                <div class="emergencia-badge">🔔 MUESTRE ESTA PANTALLA AL PERSONAL DE EMERGENCIAS</div>
+                            </div>
+                            <div class="footer">Datos actualizados automáticamente desde la base de datos</div>
+                        </div>`;
+                } else {
+                    document.getElementById('contenido').innerHTML = `
+                        <div class="card error">
+                            <div class="header"><h1>❌ Persona no encontrada</h1></div>
+                            <div class="content"><p>No se encontró información para: <strong>${escapeHTML(nombreBuscado)}</strong></p><p style="margin-top: 15px;">Verifica que el código QR sea correcto.</p></div>
+                        </div>`;
+                }
+            } catch (error) {
+                document.getElementById('contenido').innerHTML = `
+                    <div class="card error">
+                        <div class="header"><h1>⚠️ Error de conexión</h1></div>
+                        <div class="content"><p>No se pudieron cargar los datos. Verifica tu conexión a internet.</p></div>
+                    </div>`;
+            }
+        }
+        
+        function escapeHTML(texto) {
+            if (!texto) return '';
+            return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/<br>/g, ' ');
+        }
+        
+        cargarDatos();
+    </script>
+</body>
+</html>
